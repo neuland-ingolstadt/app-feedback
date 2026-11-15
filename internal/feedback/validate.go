@@ -7,22 +7,52 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	MinRating          Rating          = 1
+	MaxRating          Rating          = 5
+	MinFeatureInterest FeatureInterest = 1
+	MaxFeatureInterest FeatureInterest = 4
+)
+
+const UnknownPlatform = "unknown"
+
+// Categories, Features, and Platforms are the survey dimensions the API accepts.
+// Metrics export emits every value, including zeroes, so dashboards stay stable.
+var (
+	Categories = []Category{
+		"bugs", "performance", "login", "usability",
+		"design", "missingFeature", "timetable", "food",
+		"grades", "map",
+	}
+	Features = []FeatureIdea{
+		"digitalId", "mensaPayment", "librarySeats", "roomNavigation",
+	}
+	Platforms = []string{"ios", "android", "web"}
+)
+
 var (
 	idPattern       = regexp.MustCompile(`^[A-Za-z0-9_-]{8,64}$`)
 	campaignPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{3,64}$`)
 
-	allowedCategories = map[Category]struct{}{
-		"bugs": {}, "performance": {}, "login": {}, "usability": {},
-		"design": {}, "missingFeature": {}, "timetable": {}, "food": {},
-		"grades": {}, "map": {},
-	}
-	allowedFeatures = map[FeatureIdea]struct{}{
-		"digitalId": {}, "mensaPayment": {}, "librarySeats": {}, "roomNavigation": {},
-	}
-	allowedPlatforms = map[string]struct{}{
-		"ios": {}, "android": {}, "web": {},
-	}
+	allowedCategories map[Category]struct{}
+	allowedFeatures   map[FeatureIdea]struct{}
+	allowedPlatforms  map[string]struct{}
 )
+
+func init() {
+	allowedCategories = make(map[Category]struct{}, len(Categories))
+	for _, c := range Categories {
+		allowedCategories[c] = struct{}{}
+	}
+	allowedFeatures = make(map[FeatureIdea]struct{}, len(Features))
+	for _, f := range Features {
+		allowedFeatures[f] = struct{}{}
+	}
+	allowedPlatforms = make(map[string]struct{}, len(Platforms))
+	for _, p := range Platforms {
+		allowedPlatforms[p] = struct{}{}
+	}
+}
 
 func ValidateSubmission(s Submission, maxCommentBytes int, allowedCampaigns []string) error {
 	if !idPattern.MatchString(s.ID) {
@@ -34,7 +64,7 @@ func ValidateSubmission(s Submission, maxCommentBytes int, allowedCampaigns []st
 	if len(allowedCampaigns) > 0 && !contains(allowedCampaigns, s.Campaign) {
 		return fmt.Errorf("campaign not allowed")
 	}
-	if s.Rating < 1 || s.Rating > 5 {
+	if s.Rating < MinRating || s.Rating > MaxRating {
 		return fmt.Errorf("rating must be 1..5")
 	}
 	seen := make(map[Category]struct{}, len(s.Categories))
@@ -51,7 +81,7 @@ func ValidateSubmission(s Submission, maxCommentBytes int, allowedCampaigns []st
 		if _, ok := allowedFeatures[idea]; !ok {
 			return fmt.Errorf("invalid feature idea %q", idea)
 		}
-		if level < 1 || level > 4 {
+		if level < MinFeatureInterest || level > MaxFeatureInterest {
 			return fmt.Errorf("feature interest must be 1..4")
 		}
 	}

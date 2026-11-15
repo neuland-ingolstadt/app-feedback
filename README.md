@@ -12,6 +12,30 @@ results, tear it down. CI/CD mirrors [`discord-bot`](https://github.com/neuland-
 | `GET` | `/healthz` | — | Liveness + SQLite ping |
 | `PUT` | `/v1/feedback` | optional `X-Feedback-Key` | Upsert a feedback submission |
 | `GET` | `/v1/admin/export` | `Authorization: Bearer $ADMIN_TOKEN` | Dump stored rows |
+| `GET` | `/metrics` | — | Prometheus gauges derived from SQLite |
+
+`/healthz` and `/v1/feedback` are the only routes on the public ingress
+(`survey.neuland.app`). `/v1/admin/export` and `/metrics` stay on the process
+so they can be reached inside the cluster, and are not routed publicly.
+
+### Admin export
+
+The handler is unchanged. Fetch the raw rows with a port-forward (the bearer
+token is the `ADMIN_TOKEN` key in the `app-feedback-secrets` secret). Do not
+put that token in Grafana.
+
+```bash
+kubectl -n neuland-app port-forward svc/app-feedback 8080:8080
+curl -sS -H "Authorization: Bearer $ADMIN_TOKEN" http://127.0.0.1:8080/v1/admin/export
+```
+
+### Metrics
+
+`GET /metrics` recomputes gauges from the current SQLite rows on each scrape:
+submission totals, rating sum and histogram, platform, category, feature
+interest (count per level and score sum), and counts of non-empty comments and
+missing-feature notes. Free text is not exported. VictoriaMetrics scrapes the
+ClusterIP service; nothing on the public ingress should forward `/metrics`.
 
 ### Submit body
 
