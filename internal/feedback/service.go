@@ -67,7 +67,6 @@ func (s *Service) Submit(ctx context.Context, sub Submission, ip string, now tim
 		MissingFeatures: deref(sub.MissingFeatures),
 		Platform:        sub.Platform,
 		AppVersion:      sub.AppVersion,
-		ClientIP:        ip,
 		UpsertCount:     upsertCount,
 		UpdatedAt:       now.UTC(),
 	}

@@ -35,7 +35,6 @@ type Record struct {
 	MissingFeatures string                 `json:"missingFeatures"`
 	Platform        string                 `json:"platform"`
 	AppVersion      string                 `json:"appVersion"`
-	ClientIP        string                 `json:"clientIp"`
 	UpsertCount     int                    `json:"upsertCount"`
 	CreatedAt       time.Time              `json:"createdAt"`
 	UpdatedAt       time.Time              `json:"updatedAt"`

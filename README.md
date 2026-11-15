@@ -33,10 +33,13 @@ Matches the app payload from PR #810:
 
 ## Guardrails (kept simple)
 
-- Per-IP and per-submission-id rate limits
+- Per-IP and per-submission-id rate limits (IP only in memory, **never persisted**)
 - Upsert budget per id (`MAX_UPSERTS_PER_ID`)
 - Payload validation + optional campaign allowlist
 - Optional shared write key (`WRITE_KEY`)
+
+Stored rows are survey answers only: rating, categories, optional free text,
+feature interest, platform, app version, timestamps. No IP, no account link.
 
 ## Local run
 

@@ -46,7 +46,6 @@ CREATE TABLE IF NOT EXISTS feedback (
   missing_features TEXT NOT NULL DEFAULT '',
   platform TEXT NOT NULL DEFAULT '',
   app_version TEXT NOT NULL DEFAULT '',
-  client_ip TEXT NOT NULL DEFAULT '',
   upsert_count INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -59,7 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_feedback_campaign ON feedback(campaign);
 func (s *SQLite) Get(ctx context.Context, id string) (*feedback.Record, error) {
 	row := s.db.QueryRowContext(ctx, `
 SELECT id, campaign, rating, categories_json, comment, feature_interest_json,
-       missing_features, platform, app_version, client_ip, upsert_count,
+       missing_features, platform, app_version, upsert_count,
        created_at, updated_at
 FROM feedback WHERE id = ?`, id)
 
@@ -68,7 +67,7 @@ FROM feedback WHERE id = ?`, id)
 	var created, updated string
 	err := row.Scan(
 		&r.ID, &r.Campaign, &r.Rating, &cats, &r.Comment, &feats,
-		&r.MissingFeatures, &r.Platform, &r.AppVersion, &r.ClientIP, &r.UpsertCount,
+		&r.MissingFeatures, &r.Platform, &r.AppVersion, &r.UpsertCount,
 		&created, &updated,
 	)
 	if err == sql.ErrNoRows {
@@ -102,9 +101,9 @@ func (s *SQLite) Upsert(ctx context.Context, r feedback.Record) error {
 	_, err = s.db.ExecContext(ctx, `
 INSERT INTO feedback (
   id, campaign, rating, categories_json, comment, feature_interest_json,
-  missing_features, platform, app_version, client_ip, upsert_count,
+  missing_features, platform, app_version, upsert_count,
   created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   campaign=excluded.campaign,
   rating=excluded.rating,
@@ -114,11 +113,10 @@ ON CONFLICT(id) DO UPDATE SET
   missing_features=excluded.missing_features,
   platform=excluded.platform,
   app_version=excluded.app_version,
-  client_ip=excluded.client_ip,
   upsert_count=excluded.upsert_count,
   updated_at=excluded.updated_at
 `, r.ID, r.Campaign, r.Rating, string(cats), r.Comment, string(feats),
-		r.MissingFeatures, r.Platform, r.AppVersion, r.ClientIP, r.UpsertCount,
+		r.MissingFeatures, r.Platform, r.AppVersion, r.UpsertCount,
 		r.CreatedAt.UTC().Format(time.RFC3339Nano),
 		r.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	return err
@@ -127,7 +125,7 @@ ON CONFLICT(id) DO UPDATE SET
 func (s *SQLite) List(ctx context.Context) ([]feedback.Record, error) {
 	rows, err := s.db.QueryContext(ctx, `
 SELECT id, campaign, rating, categories_json, comment, feature_interest_json,
-       missing_features, platform, app_version, client_ip, upsert_count,
+       missing_features, platform, app_version, upsert_count,
        created_at, updated_at
 FROM feedback
 ORDER BY created_at ASC`)
@@ -143,7 +141,7 @@ ORDER BY created_at ASC`)
 		var created, updated string
 		if err := rows.Scan(
 			&r.ID, &r.Campaign, &r.Rating, &cats, &r.Comment, &feats,
-			&r.MissingFeatures, &r.Platform, &r.AppVersion, &r.ClientIP, &r.UpsertCount,
+			&r.MissingFeatures, &r.Platform, &r.AppVersion, &r.UpsertCount,
 			&created, &updated,
 		); err != nil {
 			return nil, err

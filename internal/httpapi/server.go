@@ -49,7 +49,6 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 				"path", r.URL.Path,
 				"status", ww.status,
 				"duration_ms", time.Since(start).Milliseconds(),
-				"ip", clientIP(r, s.cfg.TrustedProxyCount),
 			)
 		}()
 
