@@ -83,6 +83,16 @@ func (s *Service) Export(ctx context.Context) ([]Record, error) {
 	return s.store.List(ctx)
 }
 
+// Stats aggregates the current SQLite snapshot. Allowed campaigns with no rows
+// are still present so scrapes keep a stable set of zero gauges.
+func (s *Service) Stats(ctx context.Context) (Stats, error) {
+	rows, err := s.store.List(ctx)
+	if err != nil {
+		return Stats{}, err
+	}
+	return Aggregate(rows, s.cfg.AllowedCampaigns), nil
+}
+
 func (s *Service) Ping(ctx context.Context) error {
 	return s.store.Ping(ctx)
 }

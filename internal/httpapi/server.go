@@ -12,6 +12,7 @@ import (
 
 	"github.com/neuland-ingolstadt/app-feedback/internal/config"
 	"github.com/neuland-ingolstadt/app-feedback/internal/feedback"
+	"github.com/neuland-ingolstadt/app-feedback/internal/metrics"
 )
 
 type Server struct {
@@ -37,6 +38,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealth)
 	s.mux.HandleFunc("PUT /v1/feedback", s.handleSubmit)
 	s.mux.HandleFunc("GET /v1/admin/export", s.handleExport)
+	// Cluster-internal scrape only. The public ingress must not route /metrics.
+	s.mux.Handle("GET /metrics", metrics.Handler(s.svc.Stats))
 }
 
 func (s *Server) withMiddleware(next http.Handler) http.Handler {

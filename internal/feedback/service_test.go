@@ -59,6 +59,15 @@ func TestSubmitRoundTrip(t *testing.T) {
 	if len(rows) != 1 || rows[0].Rating != 5 || rows[0].UpsertCount != 2 {
 		t.Fatalf("unexpected rows: %+v", rows)
 	}
+
+	stats, err := svc.Stats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := stats.Campaigns["campaign-a"]
+	if cs == nil || cs.Total != 1 || cs.RatingCounts[5] != 1 || cs.RatingSum != 5 {
+		t.Fatalf("upsert should count once: %+v", cs)
+	}
 }
 
 func TestUpsertBudget(t *testing.T) {
