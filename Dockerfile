@@ -1,0 +1,35 @@
+FROM --platform=$BUILDPLATFORM golang:1.27-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS builder
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+ARG TARGETOS=linux
+ARG TARGETARCH
+ARG VERSION=dev
+ARG COMMIT=unknown
+
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
+    -o /out/server ./cmd/server
+
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+
+ARG VERSION=dev
+ARG COMMIT=unknown
+
+LABEL org.opencontainers.image.title="app-feedback" \
+      org.opencontainers.image.description="Temporary Neuland Next feedback survey API" \
+      org.opencontainers.image.source="https://github.com/neuland-ingolstadt/app-feedback" \
+      org.opencontainers.image.licenses="EUPL-1.2" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}"
+
+COPY --from=builder /out/server /server
+
+USER nonroot:nonroot
+EXPOSE 8080
+ENTRYPOINT ["/server"]
