@@ -47,17 +47,11 @@ CREATE TABLE IF NOT EXISTS feedback (
   platform TEXT NOT NULL DEFAULT '',
   app_version TEXT NOT NULL DEFAULT '',
   client_ip TEXT NOT NULL DEFAULT '',
-  trust_score REAL NOT NULL DEFAULT 0,
-  shadow_banned INTEGER NOT NULL DEFAULT 0,
   upsert_count INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_campaign ON feedback(campaign);
-CREATE TABLE IF NOT EXISTS spent_challenges (
-  id TEXT PRIMARY KEY,
-  expires_at TEXT NOT NULL
-);
 `)
 	return err
 }
@@ -65,18 +59,17 @@ CREATE TABLE IF NOT EXISTS spent_challenges (
 func (s *SQLite) Get(ctx context.Context, id string) (*feedback.Record, error) {
 	row := s.db.QueryRowContext(ctx, `
 SELECT id, campaign, rating, categories_json, comment, feature_interest_json,
-       missing_features, platform, app_version, client_ip, trust_score,
-       shadow_banned, upsert_count, created_at, updated_at
+       missing_features, platform, app_version, client_ip, upsert_count,
+       created_at, updated_at
 FROM feedback WHERE id = ?`, id)
 
 	var r feedback.Record
 	var cats, feats string
-	var shadow int
 	var created, updated string
 	err := row.Scan(
 		&r.ID, &r.Campaign, &r.Rating, &cats, &r.Comment, &feats,
-		&r.MissingFeatures, &r.Platform, &r.AppVersion, &r.ClientIP, &r.TrustScore,
-		&shadow, &r.UpsertCount, &created, &updated,
+		&r.MissingFeatures, &r.Platform, &r.AppVersion, &r.ClientIP, &r.UpsertCount,
+		&created, &updated,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -86,7 +79,6 @@ FROM feedback WHERE id = ?`, id)
 	}
 	_ = json.Unmarshal([]byte(cats), &r.Categories)
 	_ = json.Unmarshal([]byte(feats), &r.FeatureInterest)
-	r.ShadowBanned = shadow == 1
 	r.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	r.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 	return &r, nil
@@ -107,16 +99,12 @@ func (s *SQLite) Upsert(ctx context.Context, r feedback.Record) error {
 	if r.FeatureInterest == nil {
 		feats = []byte("{}")
 	}
-	shadow := 0
-	if r.ShadowBanned {
-		shadow = 1
-	}
 	_, err = s.db.ExecContext(ctx, `
 INSERT INTO feedback (
   id, campaign, rating, categories_json, comment, feature_interest_json,
-  missing_features, platform, app_version, client_ip, trust_score,
-  shadow_banned, upsert_count, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  missing_features, platform, app_version, client_ip, upsert_count,
+  created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   campaign=excluded.campaign,
   rating=excluded.rating,
@@ -127,29 +115,22 @@ ON CONFLICT(id) DO UPDATE SET
   platform=excluded.platform,
   app_version=excluded.app_version,
   client_ip=excluded.client_ip,
-  trust_score=excluded.trust_score,
-  shadow_banned=excluded.shadow_banned,
   upsert_count=excluded.upsert_count,
   updated_at=excluded.updated_at
 `, r.ID, r.Campaign, r.Rating, string(cats), r.Comment, string(feats),
-		r.MissingFeatures, r.Platform, r.AppVersion, r.ClientIP, r.TrustScore,
-		shadow, r.UpsertCount, r.CreatedAt.UTC().Format(time.RFC3339Nano),
+		r.MissingFeatures, r.Platform, r.AppVersion, r.ClientIP, r.UpsertCount,
+		r.CreatedAt.UTC().Format(time.RFC3339Nano),
 		r.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	return err
 }
 
-func (s *SQLite) List(ctx context.Context, includeShadow bool) ([]feedback.Record, error) {
-	q := `
+func (s *SQLite) List(ctx context.Context) ([]feedback.Record, error) {
+	rows, err := s.db.QueryContext(ctx, `
 SELECT id, campaign, rating, categories_json, comment, feature_interest_json,
-       missing_features, platform, app_version, client_ip, trust_score,
-       shadow_banned, upsert_count, created_at, updated_at
-FROM feedback`
-	if !includeShadow {
-		q += ` WHERE shadow_banned = 0`
-	}
-	q += ` ORDER BY created_at ASC`
-
-	rows, err := s.db.QueryContext(ctx, q)
+       missing_features, platform, app_version, client_ip, upsert_count,
+       created_at, updated_at
+FROM feedback
+ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -159,37 +140,21 @@ FROM feedback`
 	for rows.Next() {
 		var r feedback.Record
 		var cats, feats string
-		var shadow int
 		var created, updated string
 		if err := rows.Scan(
 			&r.ID, &r.Campaign, &r.Rating, &cats, &r.Comment, &feats,
-			&r.MissingFeatures, &r.Platform, &r.AppVersion, &r.ClientIP, &r.TrustScore,
-			&shadow, &r.UpsertCount, &created, &updated,
+			&r.MissingFeatures, &r.Platform, &r.AppVersion, &r.ClientIP, &r.UpsertCount,
+			&created, &updated,
 		); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(cats), &r.Categories)
 		_ = json.Unmarshal([]byte(feats), &r.FeatureInterest)
-		r.ShadowBanned = shadow == 1
 		r.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 		r.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 		out = append(out, r)
 	}
 	return out, rows.Err()
-}
-
-func (s *SQLite) SpendChallenge(ctx context.Context, id string, expiresAt time.Time) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `
-INSERT OR IGNORE INTO spent_challenges (id, expires_at) VALUES (?, ?)`,
-		id, expiresAt.UTC().Format(time.RFC3339Nano))
-	if err != nil {
-		return false, err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return n == 1, nil
 }
 
 func (s *SQLite) Ping(ctx context.Context) error {

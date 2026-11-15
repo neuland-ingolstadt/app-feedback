@@ -35,7 +35,6 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealth)
-	s.mux.HandleFunc("GET /v1/challenge", s.handleChallenge)
 	s.mux.HandleFunc("PUT /v1/feedback", s.handleSubmit)
 	s.mux.HandleFunc("GET /v1/admin/export", s.handleExport)
 }
@@ -68,7 +67,6 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 
 func (s *Server) writeCORS(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
-	// Public survey endpoint — reflect known app origins loosely for web.
 	if origin != "" {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Vary", "Origin")
@@ -92,20 +90,6 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleChallenge(w http.ResponseWriter, r *http.Request) {
-	if !s.checkWriteKey(w, r) {
-		return
-	}
-	ip := clientIP(r, s.cfg.TrustedProxyCount)
-	ch, err := s.svc.IssueChallenge(ip, time.Now().UTC())
-	if err != nil {
-		s.log.Error("issue challenge", "err", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "challenge_failed"})
-		return
-	}
-	writeJSON(w, http.StatusOK, ch)
-}
-
 func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	if !s.checkWriteKey(w, r) {
 		return
@@ -120,14 +104,12 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip := clientIP(r, s.cfg.TrustedProxyCount)
-	res, err := s.svc.Submit(r.Context(), sub, ip, time.Now().UTC())
+	err := s.svc.Submit(r.Context(), sub, ip, time.Now().UTC())
 	if err != nil {
 		switch {
 		case errors.Is(err, feedback.ErrRateLimited):
 			w.Header().Set("Retry-After", "30")
 			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
-		case errors.Is(err, feedback.ErrRejected):
-			writeJSON(w, http.StatusForbidden, map[string]any{"error": "rejected", "score": res.TrustScore})
 		case errors.Is(err, feedback.ErrInvalid):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_submission"})
 		default:
@@ -137,8 +119,6 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Always look like success to the client — shadowbans are silent.
-	_ = res
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -152,8 +132,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	includeShadow := r.URL.Query().Get("shadow") == "1"
-	rows, err := s.svc.Export(r.Context(), includeShadow)
+	rows, err := s.svc.Export(r.Context())
 	if err != nil {
 		s.log.Error("export failed", "err", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
@@ -193,7 +172,6 @@ func clientIP(r *http.Request, trustedProxies int) string {
 	if trustedProxies > 0 {
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 			parts := strings.Split(xff, ",")
-			// right-most trusted hops belong to proxies; pick the client left of them
 			idx := len(parts) - trustedProxies
 			if idx < 0 {
 				idx = 0

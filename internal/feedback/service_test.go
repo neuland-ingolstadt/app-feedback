@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/neuland-ingolstadt/app-feedback/internal/abuse"
 	"github.com/neuland-ingolstadt/app-feedback/internal/config"
 	"github.com/neuland-ingolstadt/app-feedback/internal/feedback"
 	"github.com/neuland-ingolstadt/app-feedback/internal/store"
@@ -21,75 +20,75 @@ func TestSubmitRoundTrip(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 
 	cfg := config.Config{
-		ChallengeSecret:    "test-secret",
-		PoWDifficulty:      10,
-		ChallengeTTL:       time.Minute,
-		IPRateLimit:        100,
-		IPRateBurst:        100,
-		IDRateLimit:        100,
-		IDRateBurst:        100,
-		MaxUpsertsPerID:    8,
-		MaxCommentBytes:    4000,
-		ShadowBanThreshold: 0.65,
-		RejectThreshold:    0.9,
-		AllowedCampaigns:   []string{"campaign-a"},
+		IPRateLimit:      100,
+		IPRateBurst:      100,
+		IDRateLimit:      100,
+		IDRateBurst:      100,
+		MaxUpsertsPerID:  8,
+		MaxCommentBytes:  4000,
+		AllowedCampaigns: []string{"campaign-a"},
 	}
 	svc := feedback.NewService(cfg, db)
 	now := time.Now().UTC()
 	ip := "198.51.100.9"
 
-	ch, err := svc.IssueChallenge(ip, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	counter, err := abuse.Solve(ch.Nonce, ch.Difficulty)
+	err = svc.Submit(context.Background(), feedback.Submission{
+		ID:       "submission01",
+		Campaign: "campaign-a",
+		Rating:   4,
+		Platform: "ios",
+	}, ip, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	res, err := svc.Submit(context.Background(), feedback.Submission{
-		ID:        "submission01",
-		Campaign:  "campaign-a",
-		Rating:    4,
-		Challenge: ch.Challenge,
-		Counter:   counter,
-		Platform:  "ios",
+	err = svc.Submit(context.Background(), feedback.Submission{
+		ID:       "submission01",
+		Campaign: "campaign-a",
+		Rating:   5,
+		Platform: "ios",
 	}, ip, now.Add(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Accepted {
-		t.Fatalf("expected accept, got %+v", res)
-	}
 
-	_, err = svc.Submit(context.Background(), feedback.Submission{
-		ID:        "submission01",
-		Campaign:  "campaign-a",
-		Rating:    5,
-		Challenge: ch.Challenge,
-		Counter:   counter,
-	}, ip, now.Add(3*time.Second))
-	if err == nil {
-		t.Fatal("expected replay error")
+	rows, err := svc.Export(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
+	if len(rows) != 1 || rows[0].Rating != 5 || rows[0].UpsertCount != 2 {
+		t.Fatalf("unexpected rows: %+v", rows)
+	}
+}
 
-	ch2, err := svc.IssueChallenge(ip, now.Add(2*time.Second))
+func TestUpsertBudget(t *testing.T) {
+	dir := t.TempDir()
+	db, err := store.OpenSQLite("file:" + filepath.Join(dir, "t.db") + "?_pragma=busy_timeout(5000)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	counter2, err := abuse.Solve(ch2.Nonce, ch2.Difficulty)
-	if err != nil {
+	t.Cleanup(func() { _ = db.Close() })
+
+	cfg := config.Config{
+		IPRateLimit:      100,
+		IPRateBurst:      100,
+		IDRateLimit:      100,
+		IDRateBurst:      100,
+		MaxUpsertsPerID:  2,
+		MaxCommentBytes:  4000,
+		AllowedCampaigns: nil,
+	}
+	svc := feedback.NewService(cfg, db)
+	now := time.Now().UTC()
+
+	sub := feedback.Submission{ID: "submission01", Campaign: "camp-a", Rating: 3}
+	if err := svc.Submit(context.Background(), sub, "1.1.1.1", now); err != nil {
 		t.Fatal(err)
 	}
-	_, err = svc.Submit(context.Background(), feedback.Submission{
-		ID:        "submission01",
-		Campaign:  "campaign-a",
-		Rating:    5,
-		Challenge: ch2.Challenge,
-		Counter:   counter2,
-		Platform:  "ios",
-	}, ip, now.Add(4*time.Second))
-	if err != nil {
+	if err := svc.Submit(context.Background(), sub, "1.1.1.1", now.Add(time.Second)); err != nil {
 		t.Fatal(err)
+	}
+	if err := svc.Submit(context.Background(), sub, "1.1.1.1", now.Add(2*time.Second)); err == nil {
+		t.Fatal("expected upsert budget error")
 	}
 }

@@ -37,9 +37,6 @@ func ValidateSubmission(s Submission, maxCommentBytes int, allowedCampaigns []st
 	if s.Rating < 1 || s.Rating > 5 {
 		return fmt.Errorf("rating must be 1..5")
 	}
-	if s.Challenge == "" {
-		return fmt.Errorf("missing challenge")
-	}
 	seen := make(map[Category]struct{}, len(s.Categories))
 	for _, c := range s.Categories {
 		if _, ok := allowedCategories[c]; !ok {

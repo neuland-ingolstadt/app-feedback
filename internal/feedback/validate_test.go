@@ -10,7 +10,6 @@ func TestValidateSubmissionOK(t *testing.T) {
 		Rating:     5,
 		Categories: []Category{"timetable"},
 		Comment:    &comment,
-		Challenge:  "token",
 		Platform:   "ios",
 	}, 4000, nil)
 	if err != nil {
@@ -20,10 +19,9 @@ func TestValidateSubmissionOK(t *testing.T) {
 
 func TestValidateRejectsBadRating(t *testing.T) {
 	err := ValidateSubmission(Submission{
-		ID:        "abc12345",
-		Campaign:  "camp",
-		Rating:    9,
-		Challenge: "token",
+		ID:       "abc12345",
+		Campaign: "camp",
+		Rating:   9,
 	}, 4000, nil)
 	if err == nil {
 		t.Fatal("expected error")
@@ -32,10 +30,9 @@ func TestValidateRejectsBadRating(t *testing.T) {
 
 func TestValidateCampaignAllowlist(t *testing.T) {
 	err := ValidateSubmission(Submission{
-		ID:        "abc12345",
-		Campaign:  "other",
-		Rating:    3,
-		Challenge: "token",
+		ID:       "abc12345",
+		Campaign: "other",
+		Rating:   3,
 	}, 4000, []string{"allowed-one"})
 	if err == nil {
 		t.Fatal("expected allowlist error")
