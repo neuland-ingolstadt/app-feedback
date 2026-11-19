@@ -39,7 +39,7 @@ ClusterIP service; nothing on the public ingress should forward `/metrics`.
 
 ### Submit body
 
-Matches the app payload from PR #810:
+Matches the app payload from neuland.app-native PR #839:
 
 ```json
 {
@@ -48,12 +48,23 @@ Matches the app payload from PR #810:
   "rating": 4,
   "categories": ["timetable"],
   "comment": "optional",
-  "featureInterest": { "digitalId": 3 },
-  "missingFeatures": "optional",
+  "featureInterest": {
+    "digitalId": 3,
+    "mensaPayment": 2,
+    "librarySeats": 4,
+    "roomNavigation": 1,
+    "studentExchange": 3,
+    "campusUpdates": 4,
+    "eventSignup": 2,
+    "mensaRatings": 3
+  },
   "platform": "ios",
   "appVersion": "1.2.3"
 }
 ```
+
+`missingFeatures` is still accepted for older clients but the current survey UI
+only sends a single free-text `comment`.
 
 ## Guardrails (kept simple)
 

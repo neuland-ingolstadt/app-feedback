@@ -26,6 +26,7 @@ var (
 	}
 	Features = []FeatureIdea{
 		"digitalId", "mensaPayment", "librarySeats", "roomNavigation",
+		"studentExchange", "campusUpdates", "eventSignup", "mensaRatings",
 	}
 	Platforms = []string{"ios", "android", "web"}
 )
