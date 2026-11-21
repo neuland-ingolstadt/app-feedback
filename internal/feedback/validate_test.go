@@ -74,3 +74,20 @@ func TestValidateRejectsUnknownFeatureIdea(t *testing.T) {
 		t.Fatal("expected invalid feature idea error")
 	}
 }
+
+func TestValidateAcceptsHighlightCategories(t *testing.T) {
+	err := ValidateSubmission(Submission{
+		ID:       "abc12345",
+		Campaign: "feedback-campaign-2026-10-29_18-55",
+		Rating:   5,
+		Categories: []Category{
+			"timetable", "food", "grades", "map",
+			"events", "news", "sports", "calendar",
+			"design", "performance",
+		},
+		Platform: "ios",
+	}, 4000, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
