@@ -22,7 +22,7 @@ var (
 	Categories = []Category{
 		"bugs", "performance", "login", "usability",
 		"design", "missingFeature", "timetable", "food",
-		"grades", "map",
+		"grades", "map", "events", "news", "sports", "calendar",
 	}
 	Features = []FeatureIdea{
 		"digitalId", "mensaPayment", "librarySeats", "roomNavigation",
